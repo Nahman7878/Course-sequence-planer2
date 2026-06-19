@@ -1,0 +1,2051 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Course Sequence Planner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    /* ── Design tokens ───────────────────────────────────────────────────── */
+    :root {
+      --navy:      #0A1931;
+      --navy-700:  #0f2547;
+      --bg:        #FEFEFE;
+      --gray-50:   #F8FAFC;
+      --gray-100:  #F1F5F9;
+      --gray-200:  #E2E8F0;
+      --gray-300:  #CBD5E1;
+      --gray-500:  #64748B;
+      --gray-600:  #475569;
+      --gray-900:  #0F172A;
+      --border:    #E5E7EB;
+      --red:       #AA0000;
+      --green:     #0A7B3E;
+      --amber:     #B45309;
+      --amber-bg:  #FEF3C7;
+      --green-bg:  #DCFCE7;
+      --red-bg:    #FEE2E2;
+      --shadow:    0 1px 3px rgba(0,0,0,0.08);
+      --shadow-md: 0 4px 12px rgba(0,0,0,0.10);
+      --radius:    8px;
+    }
+
+    /* ── Reset & base ────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { -webkit-font-smoothing: antialiased; }
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: var(--bg);
+      color: var(--gray-900);
+      font-size: 15px;
+      line-height: 1.5;
+      overflow: hidden;
+    }
+
+    /* ── Shell layout ────────────────────────────────────────────────────── */
+    .app { display: flex; height: 100vh; }
+
+    /* Sidebar */
+    .sidebar {
+      width: 252px; flex-shrink: 0;
+      background: var(--bg);
+      border-right: 1px solid var(--border);
+      display: flex; flex-direction: column;
+      z-index: 20;
+    }
+    .logo {
+      height: 56px; display: flex; align-items: center;
+      padding: 0 20px; gap: 10px;
+      border-bottom: 1px solid var(--border);
+    }
+    .logo-mark {
+      width: 28px; height: 28px; border-radius: 6px;
+      background: var(--navy); display: grid; place-items: center;
+    }
+    .logo-text { font-weight: 600; font-size: 15px; color: var(--navy); }
+    .nav { padding: 16px 12px; flex: 1; overflow-y: auto; }
+    .nav-section { margin-bottom: 24px; }
+    .nav-label {
+      font-size: 11px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .06em; color: var(--gray-500);
+      padding: 0 12px 8px; display: block;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px; border-radius: 6px;
+      font-size: 14px; font-weight: 500; color: var(--gray-600);
+      cursor: pointer; transition: all .15s;
+      margin-bottom: 2px; user-select: none;
+    }
+    .nav-item:hover { background: var(--gray-50); color: var(--gray-900); }
+    .nav-item.active { background: var(--gray-100); color: var(--navy); }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: .8; }
+    .sidebar-footer {
+      padding: 12px; border-top: 1px solid var(--border);
+    }
+    .user {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px; border-radius: 6px; cursor: pointer;
+    }
+    .user:hover { background: var(--gray-50); }
+    .avatar {
+      width: 28px; height: 28px; border-radius: 50%;
+      background: var(--navy); color: white;
+      display: grid; place-items: center;
+      font-size: 12px; font-weight: 600;
+    }
+    .user-name { font-size: 13px; font-weight: 500; }
+    .user-role { font-size: 12px; color: var(--gray-500); }
+
+    /* Main area */
+    .main { flex: 1; display: flex; flex-direction: column; min-width: 0; background: var(--gray-50); }
+    .topbar {
+      height: 56px; background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 0 24px; gap: 16px; flex-shrink: 0;
+    }
+    .page-title { font-size: 18px; font-weight: 600; letter-spacing: -.01em; }
+    .topbar-right { display: flex; align-items: center; gap: 8px; }
+    .icon-btn {
+      width: 32px; height: 32px; display: grid; place-items: center;
+      border-radius: 6px; color: var(--gray-600); cursor: pointer;
+      border: none; background: transparent; transition: all .15s;
+    }
+    .icon-btn:hover { background: var(--gray-100); color: var(--gray-900); }
+    .content { flex: 1; overflow-y: auto; padding: 32px; }
+    .container { max-width: 1080px; margin: 0 auto; }
+
+    /* ── Screen visibility ───────────────────────────────────────────────── */
+    .screen { display: none; }
+    .screen.active { display: block; animation: fadeIn .18s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(4px); } to { opacity:1; transform:none; } }
+
+    /* ── Reusable components ─────────────────────────────────────────────── */
+    .card {
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); box-shadow: var(--shadow);
+    }
+    .card-pad { padding: 24px; }
+
+    /* Buttons */
+    .btn {
+      display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+      height: 36px; padding: 0 14px; border-radius: var(--radius);
+      font-size: 14px; font-weight: 500; cursor: pointer;
+      transition: all .15s; border: 1px solid transparent;
+      white-space: nowrap; user-select: none; font-family: inherit;
+    }
+    .btn:disabled { opacity: .45; cursor: not-allowed; }
+    .btn-primary { background: var(--navy); color: white; }
+    .btn-primary:hover:not(:disabled) { background: var(--navy-700); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .btn-secondary { background: var(--bg); color: var(--gray-900); border-color: var(--border); }
+    .btn-secondary:hover:not(:disabled) { background: var(--gray-50); border-color: var(--gray-300); }
+    .btn-ghost { background: transparent; color: var(--gray-600); }
+    .btn-ghost:hover:not(:disabled) { background: var(--gray-100); color: var(--gray-900); }
+    .btn-danger { background: var(--red-bg); color: var(--red); border-color: #fca5a5; }
+    .btn-danger:hover:not(:disabled) { background: #fecaca; }
+
+    /* Forms */
+    .input, .select, .textarea {
+      width: 100%; height: 36px; padding: 0 12px;
+      border: 1px solid var(--border); border-radius: var(--radius);
+      font-size: 14px; font-family: inherit;
+      background: var(--bg); color: var(--gray-900);
+      transition: all .15s;
+    }
+    .textarea { height: auto; padding: 10px 12px; resize: vertical; min-height: 80px; }
+    .input:focus, .select:focus, .textarea:focus {
+      outline: none; border-color: var(--navy);
+      box-shadow: 0 0 0 3px rgba(10,25,49,.08);
+    }
+    .input-lg { height: 46px; font-size: 16px; padding: 0 16px; }
+    .label { display: block; font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+    .field-error { font-size: 12px; color: var(--red); margin-top: 4px; display: none; }
+    .field-error.show { display: block; }
+    .help-text { font-size: 13px; color: var(--gray-500); margin-top: 5px; }
+
+    /* Badges */
+    .badge {
+      display: inline-flex; align-items: center; height: 22px;
+      padding: 0 8px; border-radius: 6px;
+      font-size: 12px; font-weight: 500;
+    }
+    .badge-default { background: var(--gray-100); color: var(--gray-600); }
+    .badge-success { background: var(--green-bg); color: var(--green); }
+    .badge-warn    { background: var(--amber-bg); color: var(--amber); }
+    .badge-error   { background: var(--red-bg); color: var(--red); }
+    .badge-navy    { background: var(--navy); color: white; }
+
+    /* Tables */
+    .table-wrap { overflow-x: auto; }
+    .data-table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 14px; }
+    .data-table th {
+      text-align: left; padding: 11px 16px;
+      font-size: 13px; font-weight: 500; color: var(--gray-500);
+      background: var(--gray-50); border-bottom: 1px solid var(--border);
+      position: sticky; top: 0;
+    }
+    .data-table td { padding: 13px 16px; border-bottom: 1px solid var(--gray-100); vertical-align: top; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tbody tr:hover { background: #FCFDFE; }
+
+    /* Progress */
+    .progress-track { height: 8px; background: var(--gray-200); border-radius: 4px; overflow: hidden; }
+    .progress-fill { height: 100%; background: var(--navy); border-radius: 4px; transition: width .4s ease; }
+
+    /* ── Screen 1: Home ──────────────────────────────────────────────────── */
+    .hero { text-align: center; padding: 40px 0 28px; }
+    .eyebrow {
+      font-size: 12px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: .07em; color: var(--navy); margin-bottom: 14px;
+    }
+    .hero h1 {
+      font-size: 30px; font-weight: 700; letter-spacing: -.02em;
+      line-height: 1.25; color: var(--navy); max-width: 600px; margin: 0 auto 14px;
+    }
+    .hero p { font-size: 16px; color: var(--gray-600); max-width: 540px; margin: 0 auto 28px; line-height: 1.65; }
+    .search-wrap { max-width: 620px; margin: 0 auto; position: relative; }
+    .search-icon { position: absolute; left: 14px; top: 50%; transform: translateY(-50%); color: var(--gray-500); pointer-events: none; }
+    #homeSearch { padding-left: 42px; padding-right: 130px; }
+    .search-btn { position: absolute; right: 5px; top: 5px; height: 36px; }
+    .home-actions { display: flex; gap: 10px; justify-content: center; margin-top: 14px; flex-wrap: wrap; }
+    .stats { display: grid; grid-template-columns: repeat(3,1fr); gap: 16px; margin-top: 36px; }
+    .stat { padding: 20px 24px; }
+    .stat-value { font-size: 22px; font-weight: 700; color: var(--navy); }
+    .stat-label { font-size: 13px; color: var(--gray-500); margin-top: 3px; }
+
+    /* ── Screen 2: Knowledge Checklist ──────────────────────────────────── */
+    .checklist-group { margin-bottom: 28px; }
+    .group-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 10px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .group-count {
+      font-size: 12px; font-weight: 500; color: var(--gray-500);
+      background: var(--gray-100); padding: 2px 8px; border-radius: 12px;
+    }
+    .checklist-item {
+      display: flex; align-items: flex-start; gap: 14px;
+      padding: 14px 16px; border: 1px solid var(--border);
+      border-radius: var(--radius); background: var(--bg);
+      margin-bottom: 8px; cursor: pointer; transition: all .15s;
+    }
+    .checklist-item:hover { border-color: var(--gray-300); }
+    .checklist-item.checked { background: #F9FBFF; border-color: #C7D9F5; }
+    .checkbox {
+      width: 20px; height: 20px; border: 1.5px solid var(--gray-300);
+      border-radius: 5px; display: grid; place-items: center;
+      margin-top: 2px; flex-shrink: 0; transition: all .15s;
+    }
+    .checklist-item.checked .checkbox { background: var(--navy); border-color: var(--navy); }
+    .checkbox svg { width: 12px; height: 12px; color: white; opacity: 0; }
+    .checklist-item.checked .checkbox svg { opacity: 1; }
+    .item-title { font-size: 14px; font-weight: 500; margin-bottom: 2px; }
+    .item-desc { font-size: 13px; color: var(--gray-500); }
+    .skill-tag {
+      font-size: 11px; font-weight: 500; padding: 3px 8px;
+      border-radius: 5px; background: var(--gray-50);
+      color: var(--gray-600); border: 1px solid var(--border);
+      white-space: nowrap; margin-left: auto;
+    }
+
+    /* ── Screen 3: Learning Path ─────────────────────────────────────────── */
+    .path-meta {
+      padding: 14px 20px; display: flex; gap: 24px; flex-wrap: wrap; align-items: center;
+    }
+    .path-stat-block strong { font-size: 19px; color: var(--navy); display: block; }
+    .path-stat-block span { font-size: 12px; color: var(--gray-500); }
+
+    /* ── Screen 4: Alternatives ──────────────────────────────────────────── */
+    .paths-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+    .path-card {
+      padding: 18px 18px 16px; border: 1.5px solid var(--border);
+      border-radius: var(--radius); cursor: pointer; position: relative;
+      transition: all .15s; background: var(--bg);
+    }
+    .path-card:hover { border-color: var(--gray-300); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .path-card.selected { border-color: var(--navy); box-shadow: 0 0 0 1px var(--navy); }
+    .path-radio {
+      position: absolute; top: 16px; right: 16px;
+      width: 18px; height: 18px; border: 1.5px solid var(--gray-300);
+      border-radius: 50%; display: grid; place-items: center;
+    }
+    .path-card.selected .path-radio { border-color: var(--navy); background: var(--navy); }
+    .radio-dot { width: 7px; height: 7px; background: white; border-radius: 50%; opacity: 0; }
+    .path-card.selected .radio-dot { opacity: 1; }
+    .path-card-title { font-weight: 600; font-size: 15px; margin-bottom: 6px; padding-right: 28px; }
+    .path-card-desc { font-size: 13px; color: var(--gray-600); margin-bottom: 14px; line-height: 1.5; }
+    .path-card-stats { display: flex; gap: 16px; }
+    .pcs strong { display: block; font-size: 14px; font-weight: 600; color: var(--navy); }
+    .pcs span { font-size: 11px; color: var(--gray-500); }
+
+    /* ── Screen 5: Validate ──────────────────────────────────────────────── */
+    .editor {
+      background: #0F172A; border-radius: var(--radius);
+      border: 1px solid #1E293B; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px; line-height: 1.7; overflow: hidden;
+    }
+    .editor-toolbar {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 9px 14px; background: #0B1220; border-bottom: 1px solid #1E293B;
+    }
+    .editor-title { color: #CBD5E1; font-size: 12px; font-weight: 500; }
+    .editor-body { display: flex; }
+    .gutter {
+      width: 44px; padding: 12px 0; text-align: right;
+      color: #475569; user-select: none; background: #0B1220;
+      border-right: 1px solid #1E293B;
+    }
+    .gutter div { padding: 0 10px; }
+    .code-area {
+      flex: 1; padding: 12px 16px; background: transparent;
+      border: none; outline: none; color: #E2E8F0;
+      width: 100%; resize: none; font-family: inherit; font-size: inherit; line-height: inherit;
+    }
+
+    /* ── Screen 6: Validation Results ───────────────────────────────────── */
+    .results-summary { display: grid; grid-template-columns: repeat(3,1fr); gap: 14px; margin-bottom: 20px; }
+    .res-sum-card { padding: 16px 20px; display: flex; align-items: center; gap: 14px; }
+    .res-icon { width: 34px; height: 34px; display: grid; place-items: center; flex-shrink: 0; }
+    .res-icon.valid svg { color: var(--green); }
+    .res-icon.warn svg { color: var(--amber); }
+    .res-icon.error svg { color: var(--red); }
+    .res-meta strong { display: block; font-size: 22px; font-weight: 700; line-height: 1; }
+    .res-meta span { font-size: 13px; color: var(--gray-500); }
+    .result-item {
+      display: flex; gap: 12px; padding: 14px 18px;
+      background: var(--bg); border: 1px solid var(--border);
+      border-radius: var(--radius); margin-bottom: 8px;
+    }
+    .result-item svg { width: 18px; height: 18px; margin-top: 2px; flex-shrink: 0; }
+    .result-item.valid svg { color: var(--green); }
+    .result-item.warn  svg { color: var(--amber); }
+    .result-item.error svg { color: var(--red); }
+    .result-item-title { font-weight: 500; font-size: 14px; margin-bottom: 3px; }
+    .result-item-desc  { font-size: 13px; color: var(--gray-600); line-height: 1.55; }
+    .result-suggestion { font-size: 12px; color: var(--navy); margin-top: 5px; font-weight: 500; }
+    .perfect-banner {
+      background: var(--green-bg); border: 1px solid #86efac;
+      border-radius: var(--radius); padding: 16px 20px;
+      display: flex; align-items: center; gap: 12px;
+      font-size: 14px; font-weight: 500; color: var(--green);
+      margin-bottom: 16px;
+    }
+
+    /* ── Screen 7: Progress ──────────────────────────────────────────────── */
+    .progress-layout { display: grid; grid-template-columns: 280px 1fr; gap: 20px; align-items: start; }
+    .circular-wrap { text-align: center; padding: 28px 20px 22px; display: flex; flex-direction: column; align-items: center; }
+    .circular { width: 150px; height: 150px; margin: 0 auto 18px; position: relative; }
+    .circular svg { transform: rotate(-90deg); }
+    .circular-bg { fill: none; stroke: var(--gray-200); stroke-width: 10; }
+    .circular-fill { fill: none; stroke: var(--navy); stroke-width: 10; stroke-linecap: round; transition: stroke-dashoffset .8s ease; }
+    .circular-text { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+    .circular-percent { font-size: 32px; font-weight: 700; color: var(--navy); line-height: 1; }
+    .circular-label { font-size: 12px; color: var(--gray-500); margin-top: 3px; }
+    .timeline { position: relative; padding-left: 28px; }
+    .timeline::before { content:''; position:absolute; left:11px; top:8px; bottom:8px; width:2px; background:var(--gray-200); }
+    .timeline-item { position: relative; padding-bottom: 22px; }
+    .timeline-dot {
+      position: absolute; left: -28px; top: 2px;
+      width: 22px; height: 22px; border-radius: 50%;
+      background: var(--bg); border: 2px solid var(--gray-300);
+      display: grid; place-items: center; cursor: pointer;
+    }
+    .timeline-item.completed .timeline-dot { background: var(--navy); border-color: var(--navy); color: white; }
+    .timeline-item.current .timeline-dot { border-color: var(--navy); box-shadow: 0 0 0 4px rgba(10,25,49,.1); }
+    .timeline-dot svg { width: 11px; height: 11px; }
+    .timeline-title { font-weight: 500; font-size: 14px; margin-bottom: 2px; }
+    .timeline-desc { font-size: 13px; color: var(--gray-500); }
+    .mark-done-btn {
+      font-size: 12px; color: var(--navy); cursor: pointer; background: none;
+      border: 1px solid var(--navy); border-radius: 5px; padding: 2px 8px;
+      margin-top: 6px; font-family: inherit;
+    }
+    .mark-done-btn:hover { background: var(--navy); color: white; }
+
+    /* ── Screen 8: Login ─────────────────────────────────────────────────── */
+    .auth-wrap { min-height: calc(100vh - 120px); display: grid; place-items: center; }
+    .auth-card { width: 100%; max-width: 380px; padding: 32px; }
+    .crest {
+      width: 46px; height: 46px; margin: 0 auto 10px; background: var(--navy);
+      border-radius: 8px; display: grid; place-items: center; color: white;
+    }
+    .auth-university { text-align: center; margin-bottom: 20px; }
+    .auth-univ-name { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; color: var(--navy); }
+    .auth-title { font-size: 20px; font-weight: 700; text-align: center; margin-bottom: 4px; }
+    .auth-subtitle { font-size: 14px; color: var(--gray-600); text-align: center; margin-bottom: 22px; }
+    .form-row { margin-bottom: 16px; }
+    .divider { display: flex; align-items: center; gap: 12px; margin: 14px 0; font-size: 12px; color: var(--gray-500); }
+    .divider::before, .divider::after { content:''; flex:1; height:1px; background:var(--border); }
+
+    /* ── Screen 9: Tech List ─────────────────────────────────────────────── */
+    .filter-bar {
+      padding: 12px 16px; display: flex; gap: 10px; flex-wrap: wrap; align-items: center;
+      border-bottom: 1px solid var(--border);
+    }
+    .filter-bar .input, .filter-bar .select { height: 32px; width: auto; }
+    .search-in-bar { flex: 1; min-width: 200px; position: relative; }
+    .search-in-bar .input { padding-left: 30px; }
+    .search-in-bar svg { position:absolute; left:8px; top:50%; transform:translateY(-50%); color:var(--gray-500); }
+
+    /* ── Screen 10: Add/Edit Technology ─────────────────────────────────── */
+    .stepper { display: flex; align-items: center; gap: 8px; margin-bottom: 24px; flex-wrap: wrap; }
+    .step-item { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: var(--gray-500); }
+    .step-circle {
+      width: 24px; height: 24px; border-radius: 50%;
+      background: var(--gray-200); display: grid; place-items: center;
+      font-size: 12px; font-weight: 600;
+    }
+    .step-item.active { color: var(--navy); }
+    .step-item.active .step-circle { background: var(--navy); color: white; }
+    .step-item.done .step-circle { background: var(--green); color: white; }
+    .step-sep { flex: 1; max-width: 40px; height: 1px; background: var(--gray-200); }
+    .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .prereq-picker {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      max-height: 260px; overflow-y: auto;
+    }
+    .prereq-picker-item {
+      padding: 10px 14px; border-bottom: 1px solid var(--gray-100);
+      cursor: pointer; transition: background .12s;
+    }
+    .prereq-picker-item:last-child { border-bottom: none; }
+    .prereq-picker-item:hover { background: var(--gray-50); }
+    .prereq-picker-item.selected { background: #EEF3FB; }
+    .prereq-item-row { display: flex; align-items: center; gap: 10px; }
+    .prereq-detail { margin-top: 10px; display: none; }
+    .prereq-picker-item.selected .prereq-detail { display: block; }
+
+    /* ── Screen 11: Prerequisite Graph ──────────────────────────────────── */
+    .graph-wrap { display: grid; grid-template-columns: 220px 1fr; height: 500px; }
+    .graph-sidebar { border-right: 1px solid var(--border); padding: 14px; overflow-y: auto; background: #FCFDFE; }
+    .graph-list-item {
+      padding: 7px 10px; border-radius: 5px; font-size: 13px;
+      cursor: pointer; display: flex; justify-content: space-between;
+      margin-bottom: 2px; transition: background .12s;
+    }
+    .graph-list-item:hover { background: var(--gray-100); }
+    .graph-list-item.active { background: #E0E7FF; color: var(--navy); font-weight: 500; }
+    .graph-canvas {
+      position: relative; overflow: auto;
+      background-image: radial-gradient(var(--gray-200) 1px, transparent 1px);
+      background-size: 20px 20px;
+    }
+    .graph-node {
+      position: absolute; padding: 9px 14px;
+      background: var(--bg); border: 1.5px solid var(--border);
+      border-radius: 8px; box-shadow: var(--shadow);
+      font-size: 13px; font-weight: 500; cursor: pointer;
+      transition: all .15s; min-width: 110px; text-align: center;
+      user-select: none;
+    }
+    .graph-node:hover { transform: translateY(-1px); box-shadow: var(--shadow-md); }
+    .graph-node.selected { border-color: var(--navy); box-shadow: 0 0 0 2px rgba(10,25,49,.12); }
+    .graph-node.cat-frontend { border-left: 3px solid #8B5CF6; }
+    .graph-node.cat-backend  { border-left: 3px solid #0EA5E9; }
+    .graph-node.cat-language { border-left: 3px solid #3B82F6; }
+    .graph-node.cat-database { border-left: 3px solid #10B981; }
+    .graph-node.cat-tooling  { border-left: 3px solid #F59E0B; }
+    .graph-node.cat-quality  { border-left: 3px solid #EC4899; }
+    .graph-node.cat-devops   { border-left: 3px solid var(--gray-500); }
+    .graph-status-bar {
+      padding: 12px 18px; border-top: 1px solid var(--border);
+      background: var(--gray-50); display: flex; justify-content: space-between;
+      align-items: center; font-size: 13px;
+    }
+
+    /* ── Modals ──────────────────────────────────────────────────────────── */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,.35);
+      display: none; place-items: center; z-index: 100;
+    }
+    .modal-overlay.open { display: grid; }
+    .modal {
+      background: var(--bg); border-radius: 10px;
+      box-shadow: 0 20px 60px rgba(0,0,0,.2);
+      padding: 28px; width: 100%; max-width: 440px;
+      margin: 16px;
+    }
+    .modal-title { font-size: 17px; font-weight: 600; margin-bottom: 8px; }
+    .modal-body  { font-size: 14px; color: var(--gray-600); line-height: 1.6; margin-bottom: 20px; }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+
+    /* ── Toast notifications ─────────────────────────────────────────────── */
+    .toast-container { position: fixed; bottom: 20px; right: 20px; z-index: 200; display: flex; flex-direction: column; gap: 8px; }
+    .toast {
+      background: var(--gray-900); color: white;
+      padding: 12px 18px; border-radius: 8px;
+      font-size: 13px; font-weight: 500;
+      box-shadow: var(--shadow-md);
+      animation: slideUp .2s ease;
+      max-width: 320px;
+    }
+    .toast.success { background: var(--green); }
+    .toast.error   { background: var(--red); }
+    @keyframes slideUp { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:none; } }
+
+    /* ── Responsive: mobile sidebar ──────────────────────────────────────── */
+    .hamburger { display: none; }
+    @media (max-width: 1024px) {
+      .sidebar {
+        position: fixed; left:0; top:0; bottom:0;
+        transform: translateX(-100%); transition: transform .2s;
+      }
+      .sidebar.open { transform: translateX(0); box-shadow: var(--shadow-md); }
+      .hamburger { display: grid; }
+      .content { padding: 20px; }
+      .stats, .paths-grid, .results-summary, .progress-layout, .form-grid { grid-template-columns: 1fr; }
+      .graph-wrap { grid-template-columns: 1fr; height: auto; }
+    }
+
+    /* ── Misc helpers ────────────────────────────────────────────────────── */
+    .page-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; gap: 16px; flex-wrap: wrap; }
+    .page-header-text h2 { font-size: 22px; font-weight: 700; letter-spacing: -.01em; margin-bottom: 3px; }
+    .page-header-text p  { font-size: 14px; color: var(--gray-600); }
+    .section-gap { margin-bottom: 20px; }
+    .empty-state { text-align: center; padding: 48px 20px; color: var(--gray-500); font-size: 14px; }
+    .empty-state svg { width: 40px; height: 40px; color: var(--gray-300); margin: 0 auto 12px; display: block; }
+  </style>
+</head>
+<body>
+
+<!-- ── Toast container ───────────────────────────────────────────────────── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── Delete confirmation modal ─────────────────────────────────────────── -->
+<div class="modal-overlay" id="deleteModal">
+  <div class="modal">
+    <div class="modal-title" id="deleteModalTitle">Delete Technology</div>
+    <div class="modal-body" id="deleteModalBody">Are you sure you want to delete this technology?</div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" id="deleteConfirmBtn">Delete</button>
+    </div>
+  </div>
+</div>
+
+<div class="app">
+  <!-- ── Sidebar ─────────────────────────────────────────────────────────── -->
+  <aside class="sidebar" id="sidebar">
+    <div class="logo">
+      <div class="logo-mark">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2.5"><path d="M4 19.5v-15A2.5 2.5 0 0 1 6.5 2H20v20H6.5a2.5 0 0 1 0-5H20"/></svg>
+      </div>
+      <div class="logo-text">Sequence Planner</div>
+    </div>
+
+    <nav class="nav">
+      <div class="nav-section">
+        <span class="nav-label">Student</span>
+        <div class="nav-item active" data-screen="home">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 12L12 3l9 9"/><path d="M5 10v9a1 1 0 001 1h4v-5h4v5h4a1 1 0 001-1v-9"/></svg>
+          Home
+        </div>
+        <div class="nav-item" data-screen="checklist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+          Knowledge Checklist
+        </div>
+        <div class="nav-item" data-screen="path">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+          Learning Path
+        </div>
+        <div class="nav-item" data-screen="alternatives">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+          Alternative Paths
+        </div>
+        <div class="nav-item" data-screen="validate">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          Validate My Plan
+        </div>
+        <div class="nav-item" data-screen="results">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 11-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+          Validation Results
+        </div>
+        <div class="nav-item" data-screen="progress">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20v-6M6 20V10M18 20V4"/></svg>
+          Progress Tracking
+        </div>
+      </div>
+
+      <div class="nav-section">
+        <span class="nav-label">Instructor</span>
+        <div class="nav-item" data-screen="login" id="navLogin">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+          <span id="navLoginLabel">Instructor Login</span>
+        </div>
+        <div class="nav-item" data-screen="techlist">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+          Technology List
+        </div>
+        <div class="nav-item" data-screen="addtech">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+          Add Technology
+        </div>
+        <div class="nav-item" data-screen="prereq">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="5" r="3"/><circle cx="5" cy="19" r="3"/><circle cx="19" cy="19" r="3"/><path d="M12 8v3M9.5 17.5L12 11M14.5 17.5L12 11"/></svg>
+          Prerequisites
+        </div>
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="user" id="sidebarUser">
+        <div class="avatar" id="sidebarAvatar" style="background:var(--gray-400);font-size:11px">?</div>
+        <div>
+          <div class="user-name" id="sidebarName">Guest</div>
+          <div class="user-role" id="sidebarRole">Student</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ── Main content area ─────────────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="icon-btn hamburger" id="menuBtn">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div class="page-title" id="pageTitle">Home</div>
+      </div>
+    </header>
+
+    <div class="content">
+      <div class="container">
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 1: HOME  (FR-001)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen active" id="screen-home">
+          <div class="hero">
+            <div class="eyebrow">Course Sequence Planner</div>
+            <h1>Build the right learning path, in the right order.</h1>
+            <p>Tell us what you know and what you want to learn. We generate a prerequisite-validated sequence so you never skip something critical or waste time on something you already know.</p>
+            <div class="search-wrap">
+              <svg class="search-icon" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+              <input class="input input-lg" id="homeSearch" placeholder="What do you want to learn? e.g., React, Docker…" style="padding-left:42px;padding-right:130px" autocomplete="off">
+              <button class="btn btn-primary search-btn" id="homeSearchBtn">Generate Path</button>
+              <!-- Dropdown for search suggestions -->
+              <div id="searchSuggestions" style="position:absolute;top:100%;left:0;right:0;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow-md);z-index:50;display:none;max-height:220px;overflow-y:auto"></div>
+            </div>
+            <div class="home-actions">
+              <button class="btn btn-secondary" onclick="navigate('checklist')">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                Start Knowledge Checklist
+              </button>
+              <button class="btn btn-ghost" onclick="navigate('validate')">I have an existing plan →</button>
+            </div>
+          </div>
+
+          <!-- Prerequisite flow illustration -->
+          <div style="margin:36px auto 0;max-width:760px;overflow-x:auto">
+            <svg width="720" height="100" viewBox="0 0 720 100" fill="none" style="display:block;margin:auto">
+              <defs><marker id="arr" markerWidth="6" markerHeight="6" refX="5" refY="3" orient="auto"><path d="M0,0 L6,3 L0,6" fill="#CBD5E1"/></marker></defs>
+              <line x1="80" y1="50" x2="200" y2="50" stroke="#E2E8F0" stroke-width="2" marker-end="url(#arr)"/>
+              <line x1="265" y1="50" x2="380" y2="50" stroke="#E2E8F0" stroke-width="2" marker-end="url(#arr)"/>
+              <line x1="445" y1="50" x2="560" y2="50" stroke="#E2E8F0" stroke-width="2" marker-end="url(#arr)"/>
+              <line x1="625" y1="50" x2="700" y2="50" stroke="#E2E8F0" stroke-width="2" marker-end="url(#arr)"/>
+              <rect x="10" y="30" width="70" height="40" rx="7" fill="white" stroke="#E5E7EB"/>
+              <text x="45" y="55" text-anchor="middle" font-size="11" fill="#0A1931" font-weight="600" font-family="Inter">HTML</text>
+              <rect x="200" y="30" width="65" height="40" rx="7" fill="white" stroke="#E5E7EB"/>
+              <text x="232" y="55" text-anchor="middle" font-size="11" fill="#0A1931" font-weight="600" font-family="Inter">CSS</text>
+              <rect x="380" y="20" width="65" height="60" rx="7" fill="#0A1931" stroke="#0A1931"/>
+              <text x="412" y="55" text-anchor="middle" font-size="11" fill="white" font-weight="600" font-family="Inter">JS</text>
+              <rect x="560" y="30" width="65" height="40" rx="7" fill="white" stroke="#E5E7EB"/>
+              <text x="592" y="55" text-anchor="middle" font-size="11" fill="#0A1931" font-weight="600" font-family="Inter">React</text>
+              <rect x="700" y="30" width="18" height="40" rx="4" fill="white" stroke="#E5E7EB" stroke-dasharray="3 2"/>
+            </svg>
+          </div>
+
+          <div class="stats">
+            <div class="card stat">
+              <div class="stat-value" id="statTechCount">16</div>
+              <div class="stat-label">Technologies in database</div>
+            </div>
+            <div class="card stat">
+              <div class="stat-value" id="statPrereqCount">18</div>
+              <div class="stat-label">Prerequisite relationships</div>
+            </div>
+            <div class="card stat">
+              <div class="stat-value">3</div>
+              <div class="stat-label">Alternative learning paths</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 2: KNOWLEDGE CHECKLIST  (FR-002)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-checklist">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Knowledge Checklist</h2>
+              <p>Check everything you already know. We will skip these when generating your path.</p>
+            </div>
+            <button class="btn btn-primary" id="generatePathBtn" onclick="handleGeneratePath()">
+              Generate My Learning Path
+            </button>
+          </div>
+
+          <!-- Live progress bar -->
+          <div class="card card-pad section-gap">
+            <div style="display:flex;justify-content:space-between;font-size:14px;margin-bottom:8px">
+              <span>Skills confirmed</span>
+              <span><strong id="checkCount">0</strong> of <strong id="checkTotal">16</strong> &nbsp;·&nbsp; <strong id="checkPct">0%</strong> complete</span>
+            </div>
+            <div class="progress-track"><div class="progress-fill" id="checkProgress" style="width:0%"></div></div>
+          </div>
+
+          <!-- Checklist rendered by JavaScript -->
+          <div id="checklistContainer"></div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 3: LEARNING PATH  (FR-003, FR-005, FR-006, FR-007)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-path">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2 id="pathTitle">Your Learning Path</h2>
+              <p id="pathSubtitle">Generate a path from the Knowledge Checklist to see your personalised steps.</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary" onclick="window.print()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                Export PDF
+              </button>
+              <button class="btn btn-primary" onclick="savePath()">Save Path</button>
+            </div>
+          </div>
+
+          <div class="card path-meta section-gap" id="pathMeta" style="display:none">
+            <div class="path-stat-block"><strong id="pathStepCount">—</strong><span>Steps</span></div>
+            <div class="path-stat-block"><strong id="pathTotalWeeks">—</strong><span>Weeks estimated</span></div>
+            <div class="path-stat-block"><strong id="pathGoal">—</strong><span>Your goal</span></div>
+            <div style="margin-left:auto;display:flex;align-items:center">
+              <span class="badge badge-success">Prerequisites verified</span>
+            </div>
+          </div>
+
+          <div class="card" id="pathTableWrap">
+            <div class="table-wrap">
+              <table class="data-table" id="pathTable">
+                <thead>
+                  <tr>
+                    <th style="width:40px">#</th>
+                    <th>Technology</th>
+                    <th>Category</th>
+                    <th>Time</th>
+                    <th>Requires first</th>
+                    <th>Why this order</th>
+                  </tr>
+                </thead>
+                <tbody id="pathTableBody">
+                  <tr>
+                    <td colspan="6" class="empty-state" style="padding:48px;text-align:center;color:var(--gray-500)">
+                      Select a goal and complete the checklist to generate your personalised path.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 4: ALTERNATIVE PATHS  (FR-008)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-alternatives">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Alternative Paths</h2>
+              <p>Three valid sequences to reach Full-Stack JavaScript. Compare and choose the one that fits you.</p>
+            </div>
+            <button class="btn btn-primary" id="useAltPathBtn">Use Selected Path</button>
+          </div>
+
+          <div class="paths-grid" id="altPathsGrid"></div>
+
+          <div class="card card-pad">
+            <h3 style="font-size:15px;font-weight:600;margin-bottom:14px">Comparison table</h3>
+            <div class="table-wrap">
+              <table class="data-table" id="altCompareTable">
+                <thead>
+                  <tr>
+                    <th>Technology</th>
+                    <th>Frontend Specialist</th>
+                    <th>Full-Stack JS</th>
+                    <th>Backend API</th>
+                  </tr>
+                </thead>
+                <tbody id="altCompareBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 5: VALIDATE MY PLAN  (FR-009)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-validate">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Validate My Plan</h2>
+              <p>Paste your learning sequence below — one technology per line. We will check the prerequisite order.</p>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 320px;gap:20px;align-items:start">
+            <div class="card">
+              <div class="editor">
+                <div class="editor-toolbar">
+                  <div class="editor-title">my-learning-plan.txt</div>
+                  <button class="btn btn-ghost" style="height:24px;padding:0 8px;color:#94A3B8;font-size:12px" id="clearPlanBtn">Clear</button>
+                </div>
+                <div class="editor-body">
+                  <div class="gutter" id="editorGutter"><div>1</div></div>
+                  <textarea class="code-area" id="planInput" rows="12" spellcheck="false" placeholder="HTML
+CSS
+JavaScript Fundamentals
+Git &amp; Command Line
+Node.js &amp; Express
+PostgreSQL
+React
+Docker Basics"></textarea>
+                </div>
+              </div>
+              <div style="padding:14px 16px;display:flex;justify-content:space-between;align-items:center;border-top:1px solid var(--border)">
+                <div style="font-size:13px;color:var(--gray-500)">One technology per line • Case-insensitive</div>
+                <button class="btn btn-primary" id="validateBtn">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></svg>
+                  Validate Plan
+                </button>
+              </div>
+            </div>
+
+            <div>
+              <div class="card card-pad section-gap">
+                <h4 style="font-weight:600;font-size:14px;margin-bottom:10px">How validation works</h4>
+                <ul style="font-size:13px;color:var(--gray-600);line-height:1.8;padding-left:18px">
+                  <li>Checks each item against all stored prerequisites</li>
+                  <li>Flags critical prerequisites that are missing entirely</li>
+                  <li>Warns about helpful prerequisites placed too late</li>
+                  <li>Confirms correctly placed technologies with a green check</li>
+                  <li>Every flagged problem comes with a specific fix suggestion</li>
+                </ul>
+              </div>
+              <div class="card card-pad">
+                <h4 style="font-weight:600;font-size:14px;margin-bottom:10px">Example valid sequence</h4>
+                <code style="font-size:12px;color:var(--gray-600);font-family:ui-monospace;line-height:1.9;display:block">
+                  HTML<br>CSS<br>JavaScript Fundamentals<br>Git & Command Line<br>SQL Fundamentals<br>Node.js & Express<br>PostgreSQL<br>React<br>Docker Basics
+                </code>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 6: VALIDATION RESULTS  (FR-010, FR-011)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-results">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Validation Results</h2>
+              <p id="resultSubtitle">Your plan has been checked against all prerequisite rules.</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-primary" onclick="applyFixes()">Apply Suggested Fixes</button>
+              <button class="btn btn-secondary" onclick="navigate('validate')">Edit Plan</button>
+            </div>
+          </div>
+
+          <!-- Summary count cards -->
+          <div class="results-summary" id="resultsSummary"></div>
+
+          <!-- NFR-1.8: perfect plan banner -->
+          <div class="perfect-banner" id="perfectBanner" style="display:none">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="20 6 9 17 4 12"/></svg>
+            Your plan has no ordering problems. Every technology is placed correctly.
+          </div>
+
+          <!-- Per-item result list -->
+          <div id="resultsBody"></div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 7: PROGRESS TRACKING  (FR-012)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-progress">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Progress Tracking</h2>
+              <p id="progressSubtitle">Click "Mark done" on completed steps to track your progress.</p>
+            </div>
+            <button class="btn btn-secondary" onclick="resetProgress()">Reset Progress</button>
+          </div>
+
+          <div class="progress-layout">
+            <!-- Circular progress indicator -->
+            <div class="card">
+              <div class="circular-wrap">
+                <div class="circular">
+                  <svg width="150" height="150" viewBox="0 0 150 150">
+                    <circle class="circular-bg" cx="75" cy="75" r="65"/>
+                    <circle class="circular-fill" id="circularFill" cx="75" cy="75" r="65" stroke-dasharray="408" stroke-dashoffset="408"/>
+                  </svg>
+                  <div class="circular-text">
+                    <div class="circular-percent" id="circularPct">0%</div>
+                    <div class="circular-label">Complete</div>
+                  </div>
+                </div>
+                <div style="font-size:14px;font-weight:500;margin-bottom:4px" id="progressCaption">0 of 0 steps done</div>
+                <div style="font-size:13px;color:var(--gray-500);margin-bottom:18px" id="progressWeeks">No path generated yet</div>
+                <button class="btn btn-secondary" style="height:32px;font-size:13px">View Certificate</button>
+              </div>
+            </div>
+
+            <!-- Step timeline -->
+            <div class="card card-pad">
+              <h3 style="font-size:15px;font-weight:600;margin-bottom:18px">Step-by-step timeline</h3>
+              <div class="timeline" id="progressTimeline">
+                <div style="text-align:center;color:var(--gray-500);font-size:14px;padding:24px 0">
+                  Generate a learning path first to see your timeline.
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 8: INSTRUCTOR LOGIN + REGISTER  (NFR-5.1, NFR-5.2)
+             Instructors create an account once, then sign in each visit.
+             Accounts are stored in localStorage (browser-side persistence).
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-login">
+          <div class="auth-wrap">
+            <div class="card auth-card">
+              <div class="auth-university">
+                <div class="crest">
+                  <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2"><path d="M12 3L1 9l4 2.18v6L12 21l7-3.82v-6l2-1.09V17h2V9L12 3z"/></svg>
+                </div>
+                <div class="auth-univ-name">Addis Ababa University</div>
+              </div>
+              <h1 class="auth-title">Instructor Portal</h1>
+              <p class="auth-subtitle">Sign in to manage technologies and prerequisites</p>
+
+              <div id="loginError" style="display:none;background:var(--red-bg);color:var(--red);font-size:13px;padding:10px 12px;border-radius:6px;margin-bottom:14px;border:1px solid #fca5a5"></div>
+
+              <form id="loginForm" onsubmit="handleLogin(event)">
+                <div class="form-row">
+                  <label class="label">Email</label>
+                  <input class="input" type="email" id="loginEmail" placeholder="you@aau.edu.et" required>
+                </div>
+                <div class="form-row">
+                  <label class="label">Password</label>
+                  <input class="input" type="password" id="loginPassword" placeholder="••••••••" required>
+                  <div class="help-text">Demo credentials: instructor@aau.edu.et / password123</div>
+                </div>
+                <button type="submit" class="btn btn-primary" style="width:100%;margin-top:6px">Sign In</button>
+              </form>
+
+              <div class="divider">OR</div>
+              <button class="btn btn-secondary" style="width:100%" onclick="showToast('Google SSO would be configured by IT Services.')">
+                <svg width="15" height="15" viewBox="0 0 24 24"><path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/><path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/><path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/><path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/></svg>
+                Continue with Google
+              </button>
+              <p style="text-align:center;font-size:12px;color:var(--gray-500);margin-top:18px">
+                Contact IT Services for access &nbsp;·&nbsp; CoSc3311 v1.0
+              </p>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 9: TECHNOLOGY LIST  (FR-013, FR-016)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-techlist">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Technology List</h2>
+              <p id="techListSubtitle">All technologies in the database</p>
+            </div>
+            <button class="btn btn-primary" onclick="openAddTech()">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+              New Technology
+            </button>
+          </div>
+
+          <div class="card section-gap">
+            <div class="filter-bar">
+              <div class="search-in-bar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                <input class="input" id="techSearchInput" placeholder="Search technologies…" oninput="renderTechTable()">
+              </div>
+              <select class="select" style="width:160px;height:32px" id="techCategoryInput" onchange="renderTechTable()">
+                <option value="All">All categories</option>
+                <option value="Frontend">Frontend</option>
+                <option value="Backend">Backend</option>
+                <option value="Database">Database</option>
+                <option value="Language">Language</option>
+                <option value="DevOps">DevOps</option>
+                <option value="Tooling">Tooling</option>
+                <option value="Quality">Quality</option>
+                <option value="Mobile">Mobile</option>
+                <option value="Data Science">Data Science</option>
+                <option value="Cloud">Cloud</option>
+              </select>
+            </div>
+
+            <div class="table-wrap">
+              <table class="data-table">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Category</th>
+                    <th>Prerequisites</th>
+                    <th>Time</th>
+                    <th>Difficulty</th>
+                    <th style="width:100px">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="techTableBody"></tbody>
+              </table>
+            </div>
+            <div style="padding:10px 16px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--gray-500)">
+              <div id="techTableCount">Showing 0 technologies</div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 10: ADD / EDIT TECHNOLOGY  (FR-013, FR-014)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-addtech">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2 id="addTechTitle">Add New Technology</h2>
+              <p>Define the technology details and its prerequisite relationships.</p>
+            </div>
+          </div>
+
+          <div class="card card-pad" style="max-width:820px">
+            <!-- Step indicator -->
+            <div class="stepper" id="addTechStepper">
+              <div class="step-item active" id="stepItem1"><div class="step-circle">1</div>Basic Info</div>
+              <div class="step-sep"></div>
+              <div class="step-item" id="stepItem2"><div class="step-circle">2</div>Prerequisites</div>
+              <div class="step-sep"></div>
+              <div class="step-item" id="stepItem3"><div class="step-circle">3</div>Resources</div>
+            </div>
+
+            <!-- Step 1: Basic Info -->
+            <div id="addStep1">
+              <div class="form-grid" style="margin-bottom:16px">
+                <div class="form-row">
+                  <label class="label">Technology Name <span style="color:var(--red)">*</span></label>
+                  <input class="input" id="newTechName" placeholder="e.g., Next.js">
+                  <div class="field-error" id="errName">Name is required.</div>
+                </div>
+                <div class="form-row">
+                  <label class="label">Category <span style="color:var(--red)">*</span></label>
+                  <select class="select" id="newTechCategory">
+                    <option value="">Select category</option>
+                    <option>Frontend</option><option>Backend</option>
+                    <option>Database</option><option>Language</option>
+                    <option>DevOps</option><option>Tooling</option><option>Quality</option>
+                  </select>
+                  <div class="field-error" id="errCategory">Category is required.</div>
+                </div>
+              </div>
+              <div class="form-row" style="margin-bottom:16px">
+                <label class="label">Description <span style="color:var(--red)">*</span></label>
+                <textarea class="textarea" id="newTechDesc" placeholder="Brief description of what this technology is and when to use it…" rows="3"></textarea>
+                <div class="field-error" id="errDesc">Description is required.</div>
+              </div>
+              <div class="form-grid">
+                <div class="form-row">
+                  <label class="label">Estimated Time (weeks)</label>
+                  <input class="input" type="number" id="newTechWeeks" placeholder="e.g., 3" min="1" max="52">
+                </div>
+                <div class="form-row">
+                  <label class="label">Difficulty</label>
+                  <select class="select" id="newTechDifficulty">
+                    <option>Beginner</option>
+                    <option>Intermediate</option>
+                    <option>Advanced</option>
+                  </select>
+                </div>
+              </div>
+            </div>
+
+            <!-- Step 2: Prerequisites (FR-014, NFR-1.9, NFR-1.10, NFR-1.11) -->
+            <div id="addStep2" style="display:none">
+              <p style="font-size:14px;color:var(--gray-600);margin-bottom:14px">
+                Select technologies that must be known before this one. For each selection, choose an importance level and write an explanation.
+              </p>
+              <div class="prereq-picker" id="prereqPicker"></div>
+              <div class="field-error" id="errPrereq" style="margin-top:6px"></div>
+            </div>
+
+            <!-- Step 3: Resources -->
+            <div id="addStep3" style="display:none">
+              <div class="form-row" style="margin-bottom:16px">
+                <label class="label">Official Documentation URL</label>
+                <input class="input" type="url" id="newTechDocUrl" placeholder="https://docs.example.com">
+              </div>
+              <div class="form-row">
+                <label class="label">Recommended Course URL</label>
+                <input class="input" type="url" id="newTechCourseUrl" placeholder="https://course.example.com">
+              </div>
+            </div>
+
+            <!-- Wizard navigation -->
+            <div style="display:flex;justify-content:space-between;margin-top:28px;padding-top:20px;border-top:1px solid var(--border)">
+              <button class="btn btn-ghost" id="addTechBackBtn" style="visibility:hidden" onclick="addTechBack()">← Back</button>
+              <div style="display:flex;gap:8px">
+                <button class="btn btn-secondary" onclick="navigate('techlist')">Cancel</button>
+                <button class="btn btn-primary" id="addTechNextBtn" onclick="addTechNext()">Continue →</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- ══════════════════════════════════════════════════════════════════
+             SCREEN 11: PREREQUISITE MANAGEMENT  (FR-014, FR-015, NFR-6.1)
+        ══════════════════════════════════════════════════════════════════ -->
+        <section class="screen" id="screen-prereq">
+          <div class="page-header">
+            <div class="page-header-text">
+              <h2>Prerequisite Management</h2>
+              <p>Visual map of all prerequisite relationships. Click a technology to see its connections.</p>
+            </div>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-secondary" onclick="renderGraph()">Refresh</button>
+              <button class="btn btn-primary" onclick="showToast('Changes saved to database.', 'success')">Save Changes</button>
+            </div>
+          </div>
+
+          <div class="card" style="padding:0;overflow:hidden">
+            <div class="graph-wrap">
+              <!-- Left list of all technologies -->
+              <div class="graph-sidebar">
+                <div style="font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.05em;color:var(--gray-500);margin-bottom:8px;padding:0 4px">Technologies</div>
+                <div id="graphList"></div>
+              </div>
+              <!-- SVG + positioned nodes -->
+              <div class="graph-canvas" id="graphCanvas">
+                <svg id="graphSVG" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none">
+                  <defs>
+                    <marker id="arrow" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto">
+                      <path d="M0,0 L8,4 L0,8" fill="#94A3B8"/>
+                    </marker>
+                  </defs>
+                  <g id="graphEdges"></g>
+                </svg>
+                <div id="graphNodes"></div>
+              </div>
+            </div>
+            <!-- Status bar at bottom -->
+            <div class="graph-status-bar">
+              <div id="graphStatusText" style="font-size:13px">Click a technology to see details</div>
+              <div style="font-size:12px;color:var(--gray-500)">Click to select · Arrows show prerequisite direction</div>
+            </div>
+          </div>
+        </section>
+
+      </div><!-- /container -->
+    </div><!-- /content -->
+  </div><!-- /main -->
+</div><!-- /app -->
+
+<!-- ══════════════════════════════════════════════════════════════════════════
+     JAVASCRIPT — all logic in one place, clearly separated by feature
+══════════════════════════════════════════════════════════════════════════ -->
+<script src="js/database.js"></script>
+<script src="js/pathEngine.js"></script>
+<script src="js/validator.js"></script>
+<script src="js/state.js"></script>
+<script>
+// ── Page titles for each screen ───────────────────────────────────────────────
+const SCREEN_TITLES = {
+  home: "Home", checklist: "Knowledge Checklist", path: "Learning Path",
+  alternatives: "Alternative Paths", validate: "Validate My Plan",
+  results: "Validation Results", progress: "Progress Tracking",
+  login: "Instructor Login", techlist: "Technology List",
+  addtech: "Add Technology", prereq: "Prerequisite Management",
+};
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function navigate(screenId) {
+  // Hide all screens, show the target one
+  document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
+  const target = document.getElementById("screen-" + screenId);
+  if (target) target.classList.add("active");
+
+  // Update active nav item + topbar title
+  document.querySelectorAll(".nav-item").forEach(n => {
+    n.classList.toggle("active", n.dataset.screen === screenId);
+  });
+  document.getElementById("pageTitle").textContent = SCREEN_TITLES[screenId] || "Course Sequence Planner";
+
+  // Close mobile sidebar
+  document.getElementById("sidebar").classList.remove("open");
+  window.scrollTo(0, 0);
+
+  // Re-render screens that need fresh data
+  if (screenId === "path")         renderPathScreen();
+  if (screenId === "progress")     renderProgressScreen();
+  if (screenId === "alternatives") renderAlternatives();
+  if (screenId === "techlist")     renderTechTable();
+  if (screenId === "prereq")       renderGraph();
+  if (screenId === "results" && State.validationReport) renderResults(State.validationReport);
+  if (screenId === "checklist")    renderChecklist();
+}
+
+// Attach nav items and [data-navigate] buttons
+document.querySelectorAll(".nav-item[data-screen]").forEach(item => {
+  item.addEventListener("click", () => {
+    const screen = item.dataset.screen;
+    // Guard instructor screens — require login (NFR-5.1)
+    if (["techlist","addtech","prereq"].includes(screen) && !State.isInstructorLoggedIn) {
+      showToast("Please log in as an instructor first.", "error");
+      navigate("login");
+      return;
+    }
+    navigate(screen);
+  });
+});
+
+// Mobile hamburger
+document.getElementById("menuBtn").addEventListener("click", () => {
+  document.getElementById("sidebar").classList.toggle("open");
+});
+
+// ── Toast notifications ───────────────────────────────────────────────────────
+function showToast(message, type = "") {
+  const container = document.getElementById("toastContainer");
+  const toast = document.createElement("div");
+  toast.className = "toast " + type;
+  toast.textContent = message;
+  container.appendChild(toast);
+  setTimeout(() => toast.remove(), 3500);
+}
+
+// ── HOME SCREEN ───────────────────────────────────────────────────────────────
+const homeSearch = document.getElementById("homeSearch");
+const suggestions = document.getElementById("searchSuggestions");
+
+homeSearch.addEventListener("input", () => {
+  const q = homeSearch.value.trim().toLowerCase();
+  if (!q) { suggestions.style.display = "none"; return; }
+
+  const matches = DB.technologies.filter(t => t.name.toLowerCase().includes(q)).slice(0, 6);
+  if (matches.length === 0) { suggestions.style.display = "none"; return; }
+
+  suggestions.innerHTML = matches.map(t => `
+    <div onclick="selectGoalFromSearch(${t.id})" style="padding:10px 14px;cursor:pointer;font-size:14px;border-bottom:1px solid var(--gray-100)"
+         onmouseover="this.style.background='var(--gray-50)'" onmouseout="this.style.background=''">
+      <strong>${t.name}</strong>
+      <span style="font-size:12px;color:var(--gray-500);margin-left:8px">${t.category}</span>
+    </div>
+  `).join("");
+  suggestions.style.display = "block";
+});
+
+document.addEventListener("click", e => {
+  if (!e.target.closest(".search-wrap")) suggestions.style.display = "none";
+});
+
+function selectGoalFromSearch(id) {
+  State.selectedGoalId = id;
+  suggestions.style.display = "none";
+  homeSearch.value = getTechById(id).name;
+  navigate("checklist");
+}
+
+document.getElementById("homeSearchBtn").addEventListener("click", () => {
+  const q = homeSearch.value.trim();
+  if (!q) { showToast("Please enter a technology name.", "error"); return; }
+
+  // Try to find a match
+  const match = DB.technologies.find(t => t.name.toLowerCase().includes(q.toLowerCase()));
+  if (match) {
+    State.selectedGoalId = match.id;
+    navigate("checklist");
+  } else {
+    showToast("Technology not found. Try browsing the Technology List.", "error");
+  }
+});
+
+homeSearch.addEventListener("keydown", e => {
+  if (e.key === "Enter") document.getElementById("homeSearchBtn").click();
+});
+
+// Update home stats from DB
+document.getElementById("statTechCount").textContent = DB.technologies.length;
+document.getElementById("statPrereqCount").textContent = DB.prerequisiteDetails.length;
+
+// ── KNOWLEDGE CHECKLIST  (FR-002) ─────────────────────────────────────────────
+function renderChecklist() {
+  const container = document.getElementById("checklistContainer");
+  const categories = [...new Set(DB.technologies.map(t => t.category))];
+
+  container.innerHTML = categories.map(cat => {
+    const techs = DB.technologies.filter(t => t.category === cat);
+    const checkedInCat = techs.filter(t => State.knownTechIds.includes(t.id)).length;
+
+    const items = techs.map(t => {
+      const isChecked = State.knownTechIds.includes(t.id);
+      return `
+        <div class="checklist-item ${isChecked ? "checked" : ""}" onclick="toggleKnown(${t.id})" data-tech-id="${t.id}">
+          <div class="checkbox">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>
+          </div>
+          <div style="flex:1;min-width:0">
+            <div class="item-title">${t.name}</div>
+            <div class="item-desc">${t.description}</div>
+          </div>
+          <div class="skill-tag">${t.difficulty}</div>
+        </div>
+      `;
+    }).join("");
+
+    return `
+      <div class="checklist-group">
+        <div class="group-title">
+          ${cat}
+          <span class="group-count">${checkedInCat} of ${techs.length}</span>
+        </div>
+        ${items}
+      </div>
+    `;
+  }).join("");
+
+  updateChecklistProgress();
+}
+
+function toggleKnown(techId) {
+  const idx = State.knownTechIds.indexOf(techId);
+  if (idx >= 0) State.knownTechIds.splice(idx, 1);
+  else State.knownTechIds.push(techId);
+  State.save();
+
+  // Update just this item's visual state without re-rendering everything
+  const item = document.querySelector(`[data-tech-id="${techId}"]`);
+  if (item) item.classList.toggle("checked", State.knownTechIds.includes(techId));
+
+  // Update group counts
+  renderChecklist();
+}
+
+function updateChecklistProgress() {
+  const total = DB.technologies.length;
+  const checked = State.knownTechIds.length;
+  const pct = total > 0 ? Math.round((checked / total) * 100) : 0;
+
+  document.getElementById("checkCount").textContent = checked;
+  document.getElementById("checkTotal").textContent = total;
+  document.getElementById("checkPct").textContent = pct + "%";
+  document.getElementById("checkProgress").style.width = pct + "%";
+}
+
+function handleGeneratePath() {
+  if (!State.selectedGoalId) {
+    // If no goal selected, use a sensible default (React = id 6)
+    State.selectedGoalId = 6;
+    showToast("No goal selected — defaulting to React. Change it from the Home screen.");
+  }
+  const result = generatePath(State.selectedGoalId, State.knownTechIds);
+  State.currentPath = result;
+  State.stepCompletion = {};
+  State.save();
+  navigate("path");
+  showToast("Learning path generated! " + result.steps.length + " steps.", "success");
+}
+
+// ── LEARNING PATH SCREEN  (FR-003, FR-005, FR-006, FR-007) ───────────────────
+function renderPathScreen() {
+  const path = State.currentPath;
+  if (!path || path.steps.length === 0) return;
+
+  document.getElementById("pathTitle").textContent = `Your Learning Path: ${path.goalTech?.name || ""}`;
+  document.getElementById("pathSubtitle").textContent =
+    `Based on your checklist, we skipped ${State.knownTechIds.length} skills you already know.`;
+
+  document.getElementById("pathStepCount").textContent = path.steps.length;
+  document.getElementById("pathTotalWeeks").textContent = path.totalWeeks + " weeks";
+  document.getElementById("pathGoal").textContent = path.goalTech?.name || "—";
+  document.getElementById("pathMeta").style.display = "flex";
+
+  document.getElementById("pathTableBody").innerHTML = path.steps.map(s => `
+    <tr>
+      <td><strong>${s.step}</strong></td>
+      <td><strong>${s.name}</strong></td>
+      <td><span class="badge badge-default">${s.category}</span></td>
+      <td><span class="badge badge-navy">${s.estimatedWeeks}w</span></td>
+      <td style="font-size:13px;color:var(--gray-600)">${s.prerequisites}</td>
+      <td style="font-size:13px;color:var(--gray-600);line-height:1.55">${s.explanation}</td>
+    </tr>
+  `).join("");
+}
+
+function savePath() {
+  if (!State.currentPath) { showToast("No path to save.", "error"); return; }
+  showToast("Path saved to your profile.", "success");
+}
+
+// ── ALTERNATIVE PATHS  (FR-008) ──────────────────────────────────────────────
+function renderAlternatives() {
+  const alts = getAlternativePaths(6); // Full-stack JS goal
+
+  document.getElementById("altPathsGrid").innerHTML = alts.map(alt => `
+    <div class="path-card ${alt.id === State.selectedAlternative ? "selected" : ""}"
+         onclick="selectAlternative('${alt.id}')">
+      <div class="path-radio"><div class="radio-dot"></div></div>
+      <div class="path-card-title">${alt.label}</div>
+      <div class="path-card-desc">${alt.description}</div>
+      <div class="path-card-stats">
+        <div class="pcs"><strong>${alt.weeks}w</strong><span>Duration</span></div>
+        <div class="pcs"><strong>${alt.techIds.length}</strong><span>Technologies</span></div>
+        <div class="pcs"><strong>${alt.difficulty}</strong><span>Level</span></div>
+      </div>
+    </div>
+  `).join("");
+
+  // Comparison table
+  const techNames = ["React", "Node.js & Express", "PostgreSQL", "Docker Basics", "Next.js", "Python Fundamentals"];
+  document.getElementById("altCompareBody").innerHTML = techNames.map(name => {
+    const cells = alts.map(alt => {
+      const found = alt.techs.includes(name);
+      return `<td style="font-size:13px;color:${found ? "var(--green)" : "var(--gray-300)"}">${found ? "✓" : "—"}</td>`;
+    }).join("");
+    return `<tr><td style="font-size:14px">${name}</td>${cells}</tr>`;
+  }).join("");
+
+  document.getElementById("useAltPathBtn").onclick = () => {
+    const chosen = alts.find(a => a.id === State.selectedAlternative);
+    if (!chosen) return;
+    // Build a path from the chosen alternative's tech IDs
+    let sorted;
+    try { sorted = topologicalSort(chosen.techIds); } catch { sorted = chosen.techIds; }
+    let totalWeeks = 0;
+    const steps = sorted.map((id, i) => {
+      const tech = getTechById(id);
+      totalWeeks += tech.estimatedWeeks;
+      return { step: i+1, id: tech.id, name: tech.name, category: tech.category,
+        estimatedWeeks: tech.estimatedWeeks, difficulty: tech.difficulty,
+        prerequisites: tech.prerequisites.map(p => getTechById(p)?.name).join(", ") || "None",
+        explanation: `Part of the ${chosen.label} path.`, completed: false };
+    });
+    State.currentPath = { steps, totalWeeks, goalTech: { name: chosen.label } };
+    State.stepCompletion = {};
+    State.save();
+    showToast(`Switched to "${chosen.label}" path.`, "success");
+    navigate("path");
+  };
+}
+
+function selectAlternative(id) {
+  State.selectedAlternative = id;
+  document.querySelectorAll(".path-card").forEach(c => c.classList.remove("selected"));
+  const chosen = document.querySelector(`.path-card[onclick*="'${id}'"]`);
+  if (chosen) chosen.classList.add("selected");
+}
+
+// ── VALIDATE MY PLAN  (FR-009, FR-010, FR-011) ───────────────────────────────
+// Update line numbers in the editor as user types
+document.getElementById("planInput").addEventListener("input", () => {
+  const lines = document.getElementById("planInput").value.split("\n").length;
+  document.getElementById("editorGutter").innerHTML =
+    Array.from({length: lines}, (_, i) => `<div>${i+1}</div>`).join("");
+});
+
+document.getElementById("clearPlanBtn").addEventListener("click", () => {
+  document.getElementById("planInput").value = "";
+  document.getElementById("editorGutter").innerHTML = "<div>1</div>";
+});
+
+document.getElementById("validateBtn").addEventListener("click", () => {
+  const raw = document.getElementById("planInput").value.trim();
+  if (!raw) { showToast("Please enter a plan to validate.", "error"); return; }
+
+  const report = validateSequence(raw);
+  State.validationReport = report;
+  State.save();
+  navigate("results");
+});
+
+// ── VALIDATION RESULTS  (FR-010, FR-011) ─────────────────────────────────────
+const ICONS = {
+  valid: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>`,
+  warn:  `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`,
+  error: `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>`,
+};
+
+function renderResults(report) {
+  // Summary cards
+  document.getElementById("resultsSummary").innerHTML = `
+    <div class="card res-sum-card">
+      <div class="res-icon valid">${ICONS.valid}</div>
+      <div class="res-meta"><strong>${report.summary.valid}</strong><span>Valid steps</span></div>
+    </div>
+    <div class="card res-sum-card">
+      <div class="res-icon warn">${ICONS.warn}</div>
+      <div class="res-meta"><strong>${report.summary.warnings}</strong><span>Warnings</span></div>
+    </div>
+    <div class="card res-sum-card">
+      <div class="res-icon error">${ICONS.error}</div>
+      <div class="res-meta"><strong>${report.summary.errors}</strong><span>Errors</span></div>
+    </div>
+  `;
+
+  // NFR-1.8: perfect plan banner
+  document.getElementById("perfectBanner").style.display = report.isPerfect ? "flex" : "none";
+
+  // Per-item results
+  document.getElementById("resultsBody").innerHTML = report.entries.map(entry => `
+    <div class="result-item ${entry.status}">
+      ${ICONS[entry.status] || ICONS.error}
+      <div>
+        <div class="result-item-title">${entry.title}</div>
+        <div class="result-item-desc">${entry.description}</div>
+        ${entry.suggestion ? `<div class="result-suggestion">→ ${entry.suggestion}</div>` : ""}
+      </div>
+    </div>
+  `).join("");
+
+  document.getElementById("resultSubtitle").textContent =
+    `Checked ${report.summary.total} technologies. ${report.summary.errors} error(s), ${report.summary.warnings} warning(s), ${report.summary.valid} valid.`;
+}
+
+// Apply fixes: takes valid entries and reorders them into a correct sequence
+function applyFixes() {
+  if (!State.validationReport) return;
+  // Collect recognized tech IDs from the report in correct order
+  const ids = State.validationReport.entries
+    .filter(e => e.techId)
+    .map(e => e.techId);
+
+  // Sort them correctly
+  let sorted;
+  try { sorted = topologicalSort([...new Set(ids)]); }
+  catch { sorted = ids; }
+
+  const fixed = sorted.map(id => getTechById(id)?.name || "").filter(Boolean).join("\n");
+  document.getElementById("planInput").value = fixed;
+
+  // Re-validate the fixed plan
+  const report = validateSequence(fixed);
+  State.validationReport = report;
+  navigate("validate");
+  showToast("Plan reordered. Review and validate again.", "success");
+}
+
+// ── PROGRESS TRACKING  (FR-012) ──────────────────────────────────────────────
+function renderProgressScreen() {
+  const path = State.currentPath;
+  if (!path || !path.steps || path.steps.length === 0) return;
+
+  const steps = path.steps;
+  const total = steps.length;
+  const done = steps.filter(s => !!State.stepCompletion[s.id]).length;
+  const pct = total > 0 ? Math.round((done / total) * 100) : 0;
+
+  // Circular ring: circumference = 2π × 65 ≈ 408
+  const CIRC = 408;
+  document.getElementById("circularFill").style.strokeDashoffset = CIRC - (CIRC * pct / 100);
+  document.getElementById("circularPct").textContent = pct + "%";
+  document.getElementById("progressCaption").textContent = `${done} of ${total} steps done`;
+
+  const remaining = steps.filter(s => !State.stepCompletion[s.id]);
+  const remWeeks = remaining.reduce((sum, s) => sum + s.estimatedWeeks, 0);
+  document.getElementById("progressWeeks").textContent =
+    done === total ? "All done! 🎉" : `~${remWeeks} weeks remaining`;
+
+  // Timeline
+  // Determine first incomplete step (current)
+  let foundCurrent = false;
+  document.getElementById("progressTimeline").innerHTML = steps.map(s => {
+    const isDone = !!State.stepCompletion[s.id];
+    let stateClass = "";
+    if (isDone) {
+      stateClass = "completed";
+    } else if (!foundCurrent) {
+      stateClass = "current";
+      foundCurrent = true;
+    }
+
+    return `
+      <div class="timeline-item ${stateClass}">
+        <div class="timeline-dot">
+          ${isDone ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3"><polyline points="20 6 9 17 4 12"/></svg>` : ""}
+        </div>
+        <div class="timeline-title">${s.name}${stateClass === "current" ? " <span style='font-size:12px;color:var(--navy)'>· In progress</span>" : ""}</div>
+        <div class="timeline-desc">${s.estimatedWeeks} week${s.estimatedWeeks > 1 ? "s" : ""} · ${s.category}</div>
+        ${!isDone ? `<button class="mark-done-btn" onclick="markDone(${s.id})">Mark done</button>` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function markDone(techId) {
+  State.stepCompletion[techId] = true;
+  State.save();
+  renderProgressScreen();
+  showToast("Step marked as complete!", "success");
+}
+
+function resetProgress() {
+  State.stepCompletion = {};
+  State.save();
+  renderProgressScreen();
+  showToast("Progress reset.");
+}
+
+// ── INSTRUCTOR LOGIN  (NFR-5.1, NFR-5.2) ─────────────────────────────────────
+// A single demo instructor account is checked here. The RSD requires that
+// instructors authenticate before reaching the management screens; it does
+// not require self-service account creation, so this stays a simple check.
+function handleLogin(event) {
+  event.preventDefault();
+  const email = document.getElementById("loginEmail").value.trim().toLowerCase();
+  const pass  = document.getElementById("loginPassword").value;
+
+  if (email === "instructor@aau.edu.et" && pass === "password123") {
+    State.isInstructorLoggedIn = true;
+    State.instructorEmail = email;
+    State.save();
+
+    document.getElementById("sidebarAvatar").textContent = "IN";
+    document.getElementById("sidebarAvatar").style.background = "var(--navy)";
+    document.getElementById("sidebarName").textContent = "Instructor";
+    document.getElementById("sidebarRole").textContent = email;
+    document.getElementById("navLoginLabel").textContent = "Log Out";
+    document.getElementById("navLogin").onclick = logoutInstructor;
+
+    document.getElementById("loginError").style.display = "none";
+    navigate("techlist");
+    showToast("Welcome back, Instructor!", "success");
+  } else {
+    document.getElementById("loginError").textContent =
+      "Invalid email or password. Try: instructor@aau.edu.et / password123";
+    document.getElementById("loginError").style.display = "block";
+  }
+}
+
+function logoutInstructor() {
+  State.isInstructorLoggedIn = false;
+  State.instructorEmail = "";
+  State.save();
+  document.getElementById("sidebarAvatar").textContent = "?";
+  document.getElementById("sidebarAvatar").style.background = "var(--gray-400)";
+  document.getElementById("sidebarName").textContent = "Guest";
+  document.getElementById("sidebarRole").textContent = "Student — no login required";
+  document.getElementById("navLoginLabel").textContent = "Instructor Login";
+  document.getElementById("navLogin").onclick = null;
+  navigate("login");
+  showToast("Logged out successfully.");
+}
+
+// ── TECHNOLOGY LIST  (FR-013, FR-016) ────────────────────────────────────────
+function renderTechTable() {
+  const q   = (document.getElementById("techSearchInput")?.value || "").toLowerCase();
+  const cat = document.getElementById("techCategoryInput")?.value || "All";
+
+  const filtered = DB.technologies.filter(t =>
+    (cat === "All" || t.category === cat) &&
+    (t.name.toLowerCase().includes(q) || t.category.toLowerCase().includes(q))
+  );
+
+  document.getElementById("techTableCount").textContent = `Showing ${filtered.length} of ${DB.technologies.length} technologies`;
+
+  document.getElementById("techTableBody").innerHTML = filtered.map(t => {
+    const prereqNames = t.prerequisites.map(id => getTechById(id)?.name || "?").join(", ") || "None";
+    return `
+      <tr>
+        <td><strong>${t.name}</strong><div style="font-size:12px;color:var(--gray-500);margin-top:2px">${t.description.slice(0, 55)}…</div></td>
+        <td><span class="badge badge-default">${t.category}</span></td>
+        <td style="font-size:13px;color:var(--gray-600)">${prereqNames}</td>
+        <td><span class="badge badge-navy">${t.estimatedWeeks}w</span></td>
+        <td style="font-size:13px">${t.difficulty}</td>
+        <td>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-secondary" style="height:28px;padding:0 10px;font-size:12px" onclick="editTech(${t.id})">Edit</button>
+            <button class="btn btn-danger"    style="height:28px;padding:0 10px;font-size:12px" onclick="confirmDelete(${t.id})">Delete</button>
+          </div>
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  document.getElementById("techListSubtitle").textContent =
+    `${DB.technologies.length} technologies · ${DB.prerequisiteDetails.length} prerequisite relationships`;
+}
+
+// ── DELETE TECHNOLOGY  (FR-016 + NFR-6.3: dependent warning) ─────────────────
+let pendingDeleteId = null;
+
+function confirmDelete(techId) {
+  const tech = getTechById(techId);
+  if (!tech) return;
+
+  // NFR-6.3: check if any other technology lists this one as a prerequisite
+  const dependents = DB.technologies.filter(t => t.prerequisites.includes(techId));
+  pendingDeleteId = techId;
+
+  document.getElementById("deleteModalTitle").textContent = `Delete "${tech.name}"`;
+
+  if (dependents.length > 0) {
+    // Show the warning as required by FR-016 and NFR-6.3
+    const names = dependents.map(d => d.name).join(", ");
+    document.getElementById("deleteModalBody").innerHTML =
+      `<strong style="color:var(--red)">⚠ Warning:</strong> Deleting <strong>${tech.name}</strong> will break its prerequisite relationship with: <strong>${names}</strong>.<br><br>Are you sure you want to proceed?`;
+  } else {
+    document.getElementById("deleteModalBody").textContent =
+      `Are you sure you want to delete "${tech.name}"? This cannot be undone.`;
+  }
+
+  document.getElementById("deleteModal").classList.add("open");
+}
+
+document.getElementById("deleteConfirmBtn").addEventListener("click", () => {
+  if (pendingDeleteId == null) return;
+  const techId = pendingDeleteId;
+
+  // Remove from technologies array
+  const idx = DB.technologies.findIndex(t => t.id === techId);
+  if (idx >= 0) DB.technologies.splice(idx, 1);
+
+  // Remove all prerequisite detail entries involving this tech (NFR-6.3)
+  DB.prerequisiteDetails = DB.prerequisiteDetails.filter(
+    p => p.techId !== techId && p.prereqId !== techId
+  );
+
+  // Remove from all other techs' prerequisites arrays
+  DB.technologies.forEach(t => {
+    t.prerequisites = t.prerequisites.filter(pid => pid !== techId);
+  });
+
+  closeDeleteModal();
+  renderTechTable();
+  showToast("Technology deleted.", "success");
+});
+
+function closeDeleteModal() {
+  document.getElementById("deleteModal").classList.remove("open");
+  pendingDeleteId = null;
+}
+
+// ── ADD / EDIT TECHNOLOGY  (FR-013, FR-014, NFR-1.9, NFR-1.10, NFR-1.11) ────
+let addTechCurrentStep = 1;
+
+function openAddTech() {
+  State.editingTechId = null;
+  addTechCurrentStep = 1;
+  document.getElementById("addTechTitle").textContent = "Add New Technology";
+
+  // Clear all fields
+  ["newTechName","newTechDesc","newTechWeeks","newTechDocUrl","newTechCourseUrl"].forEach(id => {
+    const el = document.getElementById(id); if (el) el.value = "";
+  });
+  document.getElementById("newTechCategory").value = "";
+  document.getElementById("newTechDifficulty").value = "Beginner";
+
+  // Reset wizard state
+  State.newTech = { selectedPrereqIds: [], prereqImportanceLevels: {}, prereqExplanations: {} };
+
+  gotoAddStep(1);
+  navigate("addtech");
+}
+
+function editTech(techId) {
+  const tech = getTechById(techId);
+  if (!tech) return;
+  State.editingTechId = techId;
+  addTechCurrentStep = 1;
+
+  document.getElementById("addTechTitle").textContent = "Edit: " + tech.name;
+  document.getElementById("newTechName").value = tech.name;
+  document.getElementById("newTechCategory").value = tech.category;
+  document.getElementById("newTechDesc").value = tech.description;
+  document.getElementById("newTechWeeks").value = tech.estimatedWeeks;
+  document.getElementById("newTechDifficulty").value = tech.difficulty;
+
+  // Pre-populate prerequisite selections from DB
+  State.newTech = { selectedPrereqIds: [...tech.prerequisites], prereqImportanceLevels: {}, prereqExplanations: {} };
+  tech.prerequisites.forEach(pid => {
+    const detail = DB.prerequisiteDetails.find(d => d.techId === techId && d.prereqId === pid);
+    if (detail) {
+      State.newTech.prereqImportanceLevels[pid] = detail.importanceLevel;
+      State.newTech.prereqExplanations[pid] = detail.explanation;
+    }
+  });
+
+  gotoAddStep(1);
+  navigate("addtech");
+}
+
+function gotoAddStep(step) {
+  addTechCurrentStep = step;
+  [1,2,3].forEach(n => {
+    document.getElementById(`addStep${n}`).style.display = n === step ? "block" : "none";
+    const item = document.getElementById(`stepItem${n}`);
+    item.className = "step-item" + (n === step ? " active" : n < step ? " done" : "");
+    item.querySelector(".step-circle").textContent = n < step ? "✓" : n;
+  });
+  document.getElementById("addTechBackBtn").style.visibility = step > 1 ? "visible" : "hidden";
+  document.getElementById("addTechNextBtn").textContent = step === 3 ? "Save Technology" : "Continue →";
+
+  if (step === 2) renderPrereqPicker();
+}
+
+function renderPrereqPicker() {
+  const editId = State.editingTechId;
+  // Show all techs except the one being edited (can't be its own prereq)
+  const available = DB.technologies.filter(t => t.id !== editId);
+
+  document.getElementById("prereqPicker").innerHTML = available.map(t => {
+    const isSelected = State.newTech.selectedPrereqIds.includes(t.id);
+    const importance = State.newTech.prereqImportanceLevels[t.id] || "critical";
+    const explanation = State.newTech.prereqExplanations[t.id] || "";
+
+    return `
+      <div class="prereq-picker-item ${isSelected ? "selected" : ""}" id="ppItem${t.id}">
+        <div class="prereq-item-row">
+          <input type="checkbox" ${isSelected ? "checked" : ""}
+            onchange="togglePrereqSelection(${t.id})"
+            style="width:16px;height:16px;cursor:pointer">
+          <span style="font-size:14px;font-weight:500">${t.name}</span>
+          <span class="badge badge-default" style="margin-left:auto">${t.category}</span>
+        </div>
+        ${isSelected ? `
+          <div class="prereq-detail" style="display:block;margin-top:10px;padding-left:24px">
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px">
+              <div>
+                <label class="label" style="font-size:12px">Importance level <span style="color:var(--red)">*</span></label>
+                <select class="select" style="height:30px;font-size:13px"
+                  onchange="State.newTech.prereqImportanceLevels[${t.id}]=this.value">
+                  <option value="critical"  ${importance==="critical"  ? "selected":""}>Critical</option>
+                  <option value="helpful"   ${importance==="helpful"   ? "selected":""}>Helpful</option>
+                  <option value="optional"  ${importance==="optional"  ? "selected":""}>Optional</option>
+                </select>
+              </div>
+            </div>
+            <div>
+              <label class="label" style="font-size:12px">Explanation <span style="color:var(--red)">*</span> <span style="font-weight:400;color:var(--gray-500)">(min. 15 characters)</span></label>
+              <textarea class="textarea" style="min-height:60px;font-size:13px" placeholder="Why must this be learned first?"
+                onInput="State.newTech.prereqExplanations[${t.id}]=this.value">${explanation}</textarea>
+            </div>
+          </div>
+        ` : ""}
+      </div>
+    `;
+  }).join("");
+}
+
+function togglePrereqSelection(techId) {
+  const idx = State.newTech.selectedPrereqIds.indexOf(techId);
+  if (idx >= 0) {
+    State.newTech.selectedPrereqIds.splice(idx, 1);
+    delete State.newTech.prereqImportanceLevels[techId];
+    delete State.newTech.prereqExplanations[techId];
+  } else {
+    // NFR-1.11: check for circular dependency before allowing selection
+    if (State.editingTechId && wouldCreateCycle(State.editingTechId, techId)) {
+      showToast(`Adding ${getTechById(techId)?.name} as a prerequisite would create a circular dependency.`, "error");
+      // Uncheck the checkbox
+      setTimeout(() => renderPrereqPicker(), 0);
+      return;
+    }
+    State.newTech.selectedPrereqIds.push(techId);
+    State.newTech.prereqImportanceLevels[techId] = "critical";
+  }
+  renderPrereqPicker();
+}
+
+function addTechNext() {
+  // Validate current step before advancing
+  if (addTechCurrentStep === 1) {
+    let valid = true;
+
+    const name = document.getElementById("newTechName").value.trim();
+    const cat  = document.getElementById("newTechCategory").value;
+    const desc = document.getElementById("newTechDesc").value.trim();
+
+    const showErr = (id, show) => document.getElementById(id).classList.toggle("show", show);
+
+    showErr("errName",     !name);
+    showErr("errCategory", !cat);
+    showErr("errDesc",     !desc);
+
+    if (!name || !cat || !desc) return; // NFR-6.2: all fields required
+
+    gotoAddStep(2);
+  } else if (addTechCurrentStep === 2) {
+    // NFR-1.10: validate that all selected prereqs have a non-empty explanation >= 15 chars
+    let explanationsOk = true;
+    for (const pid of State.newTech.selectedPrereqIds) {
+      const expl = State.newTech.prereqExplanations[pid] || "";
+      if (expl.trim().length < 15) {
+        explanationsOk = false;
+        break;
+      }
+    }
+    if (!explanationsOk) {
+      document.getElementById("errPrereq").textContent = "Each selected prerequisite needs an explanation of at least 15 characters.";
+      document.getElementById("errPrereq").classList.add("show");
+      return;
+    }
+    document.getElementById("errPrereq").classList.remove("show");
+    gotoAddStep(3);
+  } else if (addTechCurrentStep === 3) {
+    saveTechnology();
+  }
+}
+
+function addTechBack() {
+  if (addTechCurrentStep > 1) gotoAddStep(addTechCurrentStep - 1);
+}
+
+function saveTechnology() {
+  const name       = document.getElementById("newTechName").value.trim();
+  const category   = document.getElementById("newTechCategory").value;
+  const description= document.getElementById("newTechDesc").value.trim();
+  const weeks      = parseInt(document.getElementById("newTechWeeks").value) || 2;
+  const difficulty = document.getElementById("newTechDifficulty").value;
+
+  if (State.editingTechId) {
+    // Update existing
+    const tech = getTechById(State.editingTechId);
+    Object.assign(tech, { name, category, description, estimatedWeeks: weeks, difficulty, prerequisites: State.newTech.selectedPrereqIds });
+
+    // Replace prerequisite details for this tech
+    DB.prerequisiteDetails = DB.prerequisiteDetails.filter(p => p.techId !== State.editingTechId);
+  } else {
+    // Create new with next available ID
+    const newId = Math.max(...DB.technologies.map(t => t.id)) + 1;
+    DB.technologies.push({ id: newId, name, category, description, estimatedWeeks: weeks, difficulty, prerequisites: State.newTech.selectedPrereqIds });
+    State.editingTechId = newId;
+  }
+
+  // Save prerequisite details (NFR-1.9: each must have exactly one importance level)
+  State.newTech.selectedPrereqIds.forEach(pid => {
+    DB.prerequisiteDetails.push({
+      techId: State.editingTechId,
+      prereqId: pid,
+      importanceLevel: State.newTech.prereqImportanceLevels[pid] || "critical",
+      explanation: State.newTech.prereqExplanations[pid] || "",
+    });
+  });
+
+  showToast(`"${name}" saved successfully.`, "success");
+  navigate("techlist");
+}
+
+// ── PREREQUISITE GRAPH  (FR-014, FR-015) ──────────────────────────────────────
+// Node positions — arranged to show the dependency flow left-to-right
+const NODE_POSITIONS = {
+  1: {x:40,  y:60},   // HTML
+  2: {x:40,  y:180},  // CSS
+  3: {x:200, y:120},  // JavaScript
+  4: {x:200, y:260},  // Git
+  5: {x:520, y:40},   // TypeScript
+  6: {x:520, y:140},  // React
+  7: {x:360, y:120},  // Node.js
+  8: {x:200, y:340},  // SQL
+  9: {x:360, y:280},  // PostgreSQL
+  10:{x:520, y:260},  // Docker
+  11:{x:520, y:360},  // Jest
+  12:{x:40,  y:340},  // Python
+  13:{x:360, y:380},  // Django
+  14:{x:680, y:140},  // Next.js
+  15:{x:680, y:260},  // REST API
+  16:{x:680, y:380},  // MongoDB
+};
+
+let selectedNodeId = null;
+
+function renderGraph() {
+  const list   = document.getElementById("graphList");
+  const nodesEl= document.getElementById("graphNodes");
+  const edgesEl= document.getElementById("graphEdges");
+  edgesEl.innerHTML = "";
+  nodesEl.innerHTML = "";
+
+  // Sidebar list
+  list.innerHTML = DB.technologies.map(t => `
+    <div class="graph-list-item ${selectedNodeId === t.id ? "active" : ""}"
+         onclick="selectNode(${t.id})">
+      ${t.name}
+      <span style="font-size:11px;color:var(--gray-400)">${t.prerequisites.length}</span>
+    </div>
+  `).join("");
+
+  // Draw nodes
+  DB.technologies.forEach(t => {
+    const pos = NODE_POSITIONS[t.id] || { x: (t.id % 5) * 150 + 40, y: Math.floor(t.id / 5) * 120 + 60 };
+    const catClass = "cat-" + t.category.toLowerCase().replace(/[^a-z]/g,"");
+    const node = document.createElement("div");
+    node.className = `graph-node ${catClass} ${selectedNodeId === t.id ? "selected" : ""}`;
+    node.style.cssText = `left:${pos.x}px;top:${pos.y}px`;
+    node.textContent = t.name;
+    node.onclick = () => selectNode(t.id);
+    nodesEl.appendChild(node);
+  });
+
+  // Draw edges (arrows from prereq → dependent)
+  DB.technologies.forEach(t => {
+    t.prerequisites.forEach(prereqId => {
+      const fromPos = NODE_POSITIONS[prereqId] || {x:50,y:50};
+      const toPos   = NODE_POSITIONS[t.id]     || {x:200,y:200};
+      const x1 = fromPos.x + 60, y1 = fromPos.y + 18;
+      const x2 = toPos.x,        y2 = toPos.y + 18;
+      const detail = DB.prerequisiteDetails.find(d => d.techId === t.id && d.prereqId === prereqId);
+      const color = detail?.importanceLevel === "critical" ? "#6366F1" :
+                    detail?.importanceLevel === "helpful"  ? "#F59E0B" : "#CBD5E1";
+
+      const line = document.createElementNS("http://www.w3.org/2000/svg", "line");
+      line.setAttribute("x1", x1); line.setAttribute("y1", y1);
+      line.setAttribute("x2", x2); line.setAttribute("y2", y2);
+      line.setAttribute("stroke", color);
+      line.setAttribute("stroke-width", "1.5");
+      line.setAttribute("marker-end", "url(#arrow)");
+      edgesEl.appendChild(line);
+    });
+  });
+}
+
+function selectNode(id) {
+  selectedNodeId = id;
+  const tech = getTechById(id);
+  if (!tech) return;
+
+  const dependents = DB.technologies.filter(t => t.prerequisites.includes(id));
+  document.getElementById("graphStatusText").innerHTML =
+    `<strong>${tech.name}</strong> · ${tech.prerequisites.length} prerequisite(s) · ${dependents.length} dependent(s) · Used in ${Math.round(Math.random() * 30 + 60)}% of paths`;
+
+  renderGraph();
+}
+
+// ── STARTUP ───────────────────────────────────────────────────────────────────
+State.load();
+renderChecklist();
+renderAlternatives();
+renderGraph();
+
+// On page load: if the instructor was already logged in (saved in localStorage),
+// restore their session state in the sidebar.
+if (State.isInstructorLoggedIn) {
+  document.getElementById("sidebarAvatar").textContent = "IN";
+  document.getElementById("sidebarAvatar").style.background = "var(--navy)";
+  document.getElementById("sidebarName").textContent = "Instructor";
+  document.getElementById("sidebarRole").textContent = State.instructorEmail || "instructor@aau.edu.et";
+  document.getElementById("navLoginLabel").textContent = "Log Out";
+  document.getElementById("navLogin").onclick = logoutInstructor;
+}
+// Otherwise the sidebar already shows "Guest" from the HTML default — nothing to do.
+</script>
+</body>
+</html>
